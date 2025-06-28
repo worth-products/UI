@@ -1,137 +1,81 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Full Control Reels App</title>
+  <title>Reels Exporter</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     html, body {
       width: 100%; height: 100%;
       display: flex; align-items: center; justify-content: center;
-      background: #111;
-      font-family: sans-serif;
-      overflow: hidden;
+      background: #111; font-family: sans-serif; overflow: hidden;
     }
-
     .reels-wrapper {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      max-width: 360px;
-      max-height: 640px;
-      background: #000;
-      border-radius: 20px;
-      overflow: hidden;
-      box-shadow: 0 0 20px rgba(0,0,0,0.5);
-      display: flex;
-      flex-direction: column;
+      width: 100%; height: 100%; max-width: 360px; max-height: 640px;
+      background: #000; border-radius: 20px; overflow: hidden;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5); display: flex; flex-direction: column;
     }
-
     .reels-container {
-      flex: 1;
-      overflow-y: scroll;
-      scroll-snap-type: y mandatory;
-      scroll-behavior: smooth;
+      flex: 1; overflow-y: scroll;
+      scroll-snap-type: y mandatory; scroll-behavior: smooth;
     }
-
-    .reels-container::-webkit-scrollbar {
-      display: none;
-    }
-
+    .reels-container::-webkit-scrollbar { display: none; }
     .reel {
-      position: relative;
-      height: 100%;
-      scroll-snap-align: start;
-      flex-shrink: 0;
-      background: black;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      position: relative; height: 100%;
+      scroll-snap-align: start; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
     }
-
     .video-wrapper {
-      width: 100%;
-      height: 100%;
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: black;
+      width: 100%; height: 100%; position: relative;
+      display: flex; align-items: center; justify-content: center;
     }
-
     .video-wrapper video {
-      width: 100%;
-      height: 100%;
-      object-fit: contain; /* Ensures full video shows regardless of aspect ratio */
+      width: 100%; height: 100%; object-fit: contain;
     }
-
     .video-controls {
-      position: absolute;
-      bottom: 20px;
-      left: 10px;
-      right: 10px;
-      background: rgba(0,0,0,0.5);
-      border-radius: 10px;
-      padding: 10px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      position: absolute; bottom: 10px; left: 5px; right: 5px;
+      background: rgba(0,0,0,0.5); border-radius: 8px;
+      padding: 8px; display: flex; align-items: center; gap: 6px;
     }
-
+    .video-controls input[type="number"] {
+      width: 50px; color: #fff; background: #222; border: 1px solid #444;
+      padding: 2px; border-radius: 4px;
+    }
     .video-controls button {
-      background: none;
-      border: none;
-      color: #fff;
-      font-size: 16px;
-      cursor: pointer;
+      background: none; border: none; color: #fff;
+      font-size: 16px; cursor: pointer;
     }
-
-    .video-controls input[type="range"] {
-      flex: 1;
-    }
-
+    .video-controls input[type="range"] { flex: 1; }
     .bottom-nav {
-      height: 60px;
-      background: rgba(0,0,0,0.85);
-      border-top: 1px solid #333;
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
+      height: 60px; background: rgba(0,0,0,0.85); border-top: 1px solid #333;
+      display: flex; justify-content: space-around; align-items: center;
     }
-
     .bottom-nav label, .bottom-nav button {
-      background: none;
-      border: none;
-      color: #fff;
-      font-size: 20px;
-      cursor: pointer;
+      background: none; border: none; color: #fff;
+      font-size: 20px; cursor: pointer;
     }
-
     #videoUpload { display: none; }
   </style>
 </head>
 <body>
   <div class="reels-wrapper">
-    <div class="reels-container" id="reelsContainer">
-      <!-- Videos will be inserted here -->
-    </div>
-
+    <div class="reels-container" id="reelsContainer"></div>
     <div class="bottom-nav">
       <label for="videoUpload">📤 Upload</label>
       <button onclick="clearReels()">🏠 Home</button>
-      <button >⬇️ Export</button>
+      <button onclick="exportAll()">⬇️ Export</button>
       <input type="file" id="videoUpload" accept="video/*" multiple />
     </div>
   </div>
 
   <script>
-    
     const container = document.getElementById("reelsContainer");
     const upload = document.getElementById("videoUpload");
+    const uploadedVideos = [];
 
-    function createReel(src) {
+    function createReel(src, file) {
       const reel = document.createElement("div");
       reel.className = "reel";
 
@@ -142,8 +86,8 @@
       video.src = src;
       video.playsInline = true;
       video.preload = "metadata";
+      video.muted = true;
 
-      // Video Controls
       const controls = document.createElement("div");
       controls.className = "video-controls";
 
@@ -157,40 +101,50 @@
       fullscreenBtn.textContent = "⛶";
 
       const seek = document.createElement("input");
-      seek.type = "range";
-      seek.min = 0;
-      seek.value = 0;
+      seek.type = "range"; seek.min = 0; seek.value = 0;
 
-      // Control Events
+      const startInput = document.createElement("input");
+      startInput.type = "number";
+      startInput.value = 0;
+
+      const endInput = document.createElement("input");
+      endInput.type = "number";
+      endInput.value = 60;
+
+      const videoData = {
+        file,
+        src,
+        startTimeInput: startInput,
+        endTimeInput: endInput,
+        videoElement: video
+      };
+      uploadedVideos.push(videoData);
+
       playPauseBtn.onclick = () => video.paused ? video.play() : video.pause();
       muteBtn.onclick = () => {
         video.muted = !video.muted;
         muteBtn.textContent = video.muted ? "🔇" : "🔊";
       };
-      fullscreenBtn.onclick = () => {
-        if (video.requestFullscreen) video.requestFullscreen();
-        else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
-      };
+      fullscreenBtn.onclick = () => video.requestFullscreen?.();
 
       seek.addEventListener("input", () => {
         video.currentTime = (seek.value / 100) * video.duration;
       });
-
       video.addEventListener("timeupdate", () => {
         seek.value = (video.currentTime / video.duration) * 100 || 0;
       });
 
-      controls.append(playPauseBtn, muteBtn, seek, fullscreenBtn);
+      controls.append(playPauseBtn, muteBtn, seek, fullscreenBtn, startInput, endInput);
       wrapper.append(video, controls);
       reel.append(wrapper);
-
       return reel;
     }
 
     upload.addEventListener("change", (e) => {
       for (let file of e.target.files) {
         const url = URL.createObjectURL(file);
-        container.appendChild(createReel(url));
+        const reel = createReel(url, file);
+        container.appendChild(reel);
       }
       setTimeout(handleScroll, 300);
     });
@@ -200,7 +154,7 @@
       document.querySelectorAll("video").forEach(v => {
         const rect = v.getBoundingClientRect();
         const inView = rect.top >= wrapperRect.top && rect.bottom <= wrapperRect.bottom;
-        inView ? v.play().catch(()=>{}) : v.pause();
+        inView ? v.play().catch(() => {}) : v.pause();
       });
     }
 
@@ -209,10 +163,318 @@
 
     function clearReels() {
       container.innerHTML = "";
+      uploadedVideos.length = 0;
       window.location.reload();
     }
 
+    async function exportAll() {
+      if (uploadedVideos.length === 0) {
+        alert("No videos to export.");
+        return;
+      }
 
+      const zip = new JSZip();
+
+      for (let i = 0; i < uploadedVideos.length; i++) {
+        const { videoElement, startTimeInput, endTimeInput, file } = uploadedVideos[i];
+        const startTime = parseFloat(startTimeInput.value);
+        const endTime = parseFloat(endTimeInput.value);
+        const duration = endTime - startTime;
+        if (duration <= 0) continue;
+
+        await new Promise((resolve) => {
+          const canvas = document.createElement("canvas");
+          canvas.width = videoElement.videoWidth || 360;
+          canvas.height = videoElement.videoHeight || 640;
+          const ctx = canvas.getContext("2d");
+
+          const stream = canvas.captureStream();
+          const chunks = [];
+          const recorder = new MediaRecorder(stream);
+          recorder.ondataavailable = e => chunks.push(e.data);
+          recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: "video/webm" });
+            const name = file.name.replace(/\.\w+$/, '') + `_clip_${startTime}s-${endTime}s.webm`;
+            zip.file(name, blob);
+            resolve();
+          };
+
+          videoElement.pause();
+          videoElement.currentTime = startTime;
+          videoElement.onseeked = () => {
+            videoElement.play();
+            recorder.start();
+            const start = performance.now();
+
+            function draw() {
+              ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+              if (performance.now() - start < duration * 1000) {
+                requestAnimationFrame(draw);
+              } else {
+                recorder.stop();
+                videoElement.pause();
+              }
+            }
+            draw();
+          };
+        });
+      }
+
+      zip.generateAsync({ type: "blob" }).then((content) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(content);
+        a.download = "reels_clips.zip";
+        a.click();
+      });
+    }
+  </script>
+</body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reels Exporter</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      background: #111; font-family: sans-serif; overflow: hidden;
+    }
+    .reels-wrapper {
+      width: 100%; height: 100%; max-width: 360px; max-height: 640px;
+      background: #000; border-radius: 20px; overflow: hidden;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5); display: flex; flex-direction: column;
+    }
+    .reels-container {
+      flex: 1; overflow-y: scroll;
+      scroll-snap-type: y mandatory; scroll-behavior: smooth;
+    }
+    .reels-container::-webkit-scrollbar { display: none; }
+    .reel {
+      position: relative; height: 100%;
+      scroll-snap-align: start; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .video-wrapper {
+      width: 100%; height: 100%; position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .video-wrapper video {
+      width: 100%; height: 100%; object-fit: contain;
+    }
+    .video-controls {
+      position: absolute; bottom: 10px; left: 5px; right: 5px;
+      background: rgba(0,0,0,0.5); border-radius: 8px;
+      padding: 8px; display: flex; align-items: center; gap: 6px;
+    }
+    .video-controls input[type="number"] {
+      width: 50px; color: #fff; background: #222; border: 1px solid #444;
+      padding: 2px; border-radius: 4px;
+    }
+    .video-controls button {
+      background: none; border: none; color: #fff;
+      font-size: 16px; cursor: pointer;
+    }
+    .video-controls input[type="range"] { flex: 1; }
+    .bottom-nav {
+      height: 60px; background: rgba(0,0,0,0.85); border-top: 1px solid #333;
+      display: flex; justify-content: space-around; align-items: center;
+    }
+    .bottom-nav label, .bottom-nav button {
+      background: none; border: none; color: #fff;
+      font-size: 20px; cursor: pointer;
+    }
+    #videoUpload { display: none; }
+  </style>
+</head>
+<body>
+  <div class="reels-wrapper">
+    <div class="reels-container" id="reelsContainer"></div>
+    <div class="bottom-nav">
+      <label for="videoUpload">📤 Upload</label>
+      <button onclick="clearReels()">🏠 Home</button>
+      <button onclick="exportAll()">⬇️ Export</button>
+      <input type="file" id="videoUpload" accept="video/*" multiple />
+    </div>
+  </div>
+
+  <script>
+    const container = document.getElementById("reelsContainer");
+    const upload = document.getElementById("videoUpload");
+    const uploadedVideos = [];
+
+    function createReel(src, file) {
+      const reel = document.createElement("div");
+      reel.className = "reel";
+
+      const wrapper = document.createElement("div");
+      wrapper.className = "video-wrapper";
+
+      const video = document.createElement("video");
+      video.src = src;
+      video.playsInline = true;
+      video.preload = "metadata";
+      video.muted = false;
+      video.controls = false;
+
+      const controls = document.createElement("div");
+      controls.className = "video-controls";
+
+      const playPauseBtn = document.createElement("button");
+      playPauseBtn.textContent = "⏯️";
+
+      const muteBtn = document.createElement("button");
+      muteBtn.textContent = "🔇";
+
+      const fullscreenBtn = document.createElement("button");
+      fullscreenBtn.textContent = "⛶";
+
+      const seek = document.createElement("input");
+      seek.type = "range"; seek.min = 0; seek.value = 0;
+
+      const startInput = document.createElement("input");
+      startInput.type = "number";
+      startInput.value = 0;
+      startInput.min = 0;
+      startInput.step = "any";
+      startInput.title = "Start time (seconds)";
+
+      const endInput = document.createElement("input");
+      endInput.type = "number";
+      endInput.value = 60;
+      endInput.min = 0;
+      endInput.step = "any";
+      endInput.title = "End time (seconds)";
+
+      video.onloadedmetadata = () => {
+        endInput.value = video.duration.toFixed(2);
+        endInput.max = video.duration;
+        startInput.max = video.duration;
+      };
+
+      const videoData = {
+        file,
+        src,
+        startTimeInput: startInput,
+        endTimeInput: endInput,
+        videoElement: video
+      };
+      uploadedVideos.push(videoData);
+
+      playPauseBtn.onclick = () => video.paused ? video.play() : video.pause();
+     
+      muteBtn.onclick = () => {
+        video.muted = !video.muted;
+        muteBtn.textContent = video.muted ? "🔇" : "🔊";
+      };
+      fullscreenBtn.onclick = () => video.requestFullscreen?.();
+
+      seek.addEventListener("input", () => {
+        video.currentTime = (seek.value / 100) * video.duration;
+      });
+      video.addEventListener("timeupdate", () => {
+        seek.value = (video.currentTime / video.duration) * 100 || 0;
+      });
+
+      controls.append(playPauseBtn, muteBtn, seek, fullscreenBtn, startInput, endInput);
+      wrapper.append(video, controls);
+      reel.append(wrapper);
+      return reel;
+    }
+
+    upload.addEventListener("change", (e) => {
+      for (let file of e.target.files) {
+        const url = URL.createObjectURL(file);
+        const reel = createReel(url, file);
+        container.appendChild(reel);
+      }
+      setTimeout(handleScroll, 300);
+    });
+
+    function handleScroll() {
+      const wrapperRect = container.getBoundingClientRect();
+      document.querySelectorAll("video").forEach(v => {
+        const rect = v.getBoundingClientRect();
+        const inView = rect.top >= wrapperRect.top && rect.bottom <= wrapperRect.bottom;
+        inView ? v.play().catch(() => {}) : v.pause();
+      });
+    }
+
+    container.addEventListener("scroll", handleScroll);
+    window.addEventListener("load", handleScroll);
+
+    function clearReels() {
+      container.innerHTML = "";
+      uploadedVideos.length = 0;
+      window.location.reload();
+    }
+
+    async function exportAll() {
+      if (uploadedVideos.length === 0) {
+        alert("No videos to export.");
+        return;
+      }
+
+      const zip = new JSZip();
+
+      for (let i = 0; i < uploadedVideos.length; i++) {
+        const { videoElement, startTimeInput, endTimeInput, file } = uploadedVideos[i];
+        const startTime = parseFloat(startTimeInput.value);
+        const endTime = parseFloat(endTimeInput.value);
+        const duration = endTime - startTime;
+        if (duration <= 0) continue;
+
+        await new Promise((resolve) => {
+          const canvas = document.createElement("canvas");
+          canvas.width = videoElement.videoWidth || 360;
+          canvas.height = videoElement.videoHeight || 640;
+          const ctx = canvas.getContext("2d");
+
+          const stream = canvas.captureStream();
+          const chunks = [];
+          const recorder = new MediaRecorder(stream);
+          recorder.ondataavailable = e => chunks.push(e.data);
+          recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: "video/webm" });
+            const name = file.name.replace(/\.\w+$/, '') + `_clip_${startTime}s-${endTime}s.webm`;
+            zip.file(name, blob);
+            resolve();
+          };
+
+          videoElement.pause();
+          videoElement.currentTime = startTime;
+          videoElement.onseeked = () => {
+            videoElement.play();
+            recorder.start();
+            const start = performance.now();
+
+            function draw() {
+              ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+              if (performance.now() - start < duration * 1000) {
+                requestAnimationFrame(draw);
+              } else {
+                recorder.stop();
+                videoElement.pause();
+              }
+            }
+            draw();
+          };
+        });
+      }
+
+      zip.generateAsync({ type: "blob" }).then((content) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(content);
+        a.download = "reels_clips.zip";
+        a.click();
+      });
+    }
   </script>
 </body>
 </html>
